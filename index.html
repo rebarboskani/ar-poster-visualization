@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>F1 Driver Emotions Visualization</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>F1 Driver Emotions AR Visualization</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; }
         #captureButton {
@@ -28,16 +32,17 @@
             font-size: 12px;
             max-width: 300px;
         }
-    </style>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@latest/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@latest/examples/jsm/"
-            }
+        .ar-ui {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 1000;
         }
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+    </style>
 </head>
 <body>
     <button id="captureButton">Capture High-Res PNG</button>
@@ -45,13 +50,27 @@
         <h3>F1 Driver Emotions - Lap 31</h3>
         <div id="driverInfo"></div>
     </div>
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    <div class="ar-ui">
+        <h2>Point camera at the F1 poster</h2>
+        <p>Scan the target image to see the 3D visualization</p>
+    </div>
 
+    <a-scene mindar-image="imageTargetSrc: targets.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+        <a-assets>
+            <!-- We'll create the 3D content dynamically -->
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        
+        <a-entity mindar-image-target="targetIndex: 0">
+            <!-- This is where our 3D visualization will be placed -->
+            <a-entity id="f1-visualization" position="0 0 0.1" scale="0.5 0.5 0.5">
+                <!-- 3D content will be added here via JavaScript -->
+            </a-entity>
+        </a-entity>
+    </a-scene>
+
+    <script>
         // Emotion data for lap 31
         const lap31Data = [
             { driver: 'ALO', frustration: 0.323544798, pressure: 0.617500849, confidence: 0.105177988, risk_taking: 0.030807275, aggressiveness: 0.001775942 },
@@ -96,7 +115,6 @@
 
         // Function to normalize emotion values
         function normalizeEmotions(data) {
-            // Calculate min and max for each emotion
             const emotions = ['frustration', 'pressure', 'confidence', 'risk_taking', 'aggressiveness'];
             const ranges = {};
             
@@ -105,16 +123,13 @@
                 const min = Math.min(...values);
                 const max = Math.max(...values);
                 ranges[emotion] = { min, max, range: max - min };
-                console.log(`${emotion}: Min: ${min.toFixed(6)}, Max: ${max.toFixed(6)}, Range: ${(max - min).toFixed(6)}`);
             });
             
-            // Normalize each driver's emotions
             return data.map(driver => {
                 const normalized = { driver: driver.driver };
                 emotions.forEach(emotion => {
                     const value = driver[emotion];
                     const range = ranges[emotion];
-                    // Normalize to 0-1 range
                     normalized[emotion] = range.range === 0 ? 0.5 : (value - range.min) / range.range;
                 });
                 return normalized;
@@ -137,288 +152,166 @@
         const numDrivers = driverDataWithPositions.length;
         const numRings = 20;
 
-        // Initialize scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x000000);
-        renderer.toneMapping = THREE.ReinhardToneMapping;
-        renderer.toneMappingExposure = 1.0;
-        document.body.appendChild(renderer.domElement);
-
-        // Post-processing for bloom effect
-        const composer = new EffectComposer(renderer);
-        const renderPass = new RenderPass(scene, camera);
-        composer.addPass(renderPass);
-
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 0.1;
-        bloomPass.strength = 1.2;
-        bloomPass.radius = 0.5;
-        composer.addPass(bloomPass);
-
-        // Add free camera control
-        const orbitControls = new OrbitControls(camera, renderer.domElement);
-        orbitControls.enableDamping = true;
-        orbitControls.dampingFactor = 0.05;
-
-        camera.position.set(0, 0, 8); // Initial camera position
-        const initialDist = camera.position.length();
-
-        // Controls for the movements (individual objects for each ring)
-        const controls = {
-            rings: Array.from({ length: numRings }, () => ({
-                orbitSpeed: 0.5,
-                oscillationAmp: 0.5,
-                thickness: 0.5,
-                shakeIntensity: 0.5,
-                wobbleAmp: 0.5,
-                colorHex: ''
-            }))
+        // Animation parameters
+        const animationParams = {
+            time: 0,
+            lastTime: 0,
+            phases: Array.from({ length: numRings }, () => Math.random() * 2 * Math.PI),
+            baseRadii: Array.from({ length: numRings }, (_, i) => 1 + i * 0.3),
+            maxThickness: 0.3,
+            maxOscillation: 0.3,
+            maxShake: 0.1,
+            maxWobble: 0.2,
+            waveCount: 5,
+            shakeFrequency: 10
         };
 
-        const gui = new dat.GUI();
-        const ringFolders = [];
-        const colorChoices = ['#1E40AF', '#00D2BE', '#DC0000', '#FF8700', '#006F62', '#FF80BF', '#00A0DE', '#64748B', '#52E252', '#FFFFFF'];
-        
-        // Only create GUI controls for rings that have driver data
-        for (let i = 0; i < numRings; i++) {
-            const ringFolder = gui.addFolder(`Ring ${i+1}${i < numDrivers ? ` - ${driverDataWithPositions[i].driver}` : ' (Unused)'}`);
-            ringFolder.add(controls.rings[i], 'orbitSpeed', 0, 1);
-            ringFolder.add(controls.rings[i], 'oscillationAmp', 0, 1);
-            ringFolder.add(controls.rings[i], 'thickness', 0, 1);
-            ringFolder.add(controls.rings[i], 'shakeIntensity', 0, 1);
-            ringFolder.add(controls.rings[i], 'wobbleAmp', 0, 1);
-            ringFolder.add(controls.rings[i], 'colorHex', colorChoices).name('Color').onChange(() => updateRingColors(i));
-            ringFolders.push(ringFolder);
-        }
-
-        // Add bloom controls
-        const bloomFolder = gui.addFolder('Bloom');
-        bloomFolder.add(bloomPass, 'threshold', 0, 1).name('Threshold');
-        bloomFolder.add(bloomPass, 'strength', 0, 3).name('Strength');
-        bloomFolder.add(bloomPass, 'radius', 0, 1).name('Radius');
-
-        // Add randomize button
-        const actions = {
-            randomize: function() {
-                controls.rings.forEach(ring => {
-                    ring.orbitSpeed = Math.random();
-                    ring.oscillationAmp = Math.random();
-                    ring.thickness = Math.random();
-                    ring.shakeIntensity = Math.random();
-                    ring.wobbleAmp = Math.random();
-                });
-                ringFolders.forEach(folder => {
-                    folder.__controllers.forEach(controller => controller.updateDisplay());
-                });
-            }
-        };
-        gui.add(actions, 'randomize').name('Randomize All');
-
-        // Parameters
-        const numParticlesPerRing = 20000; // Increased for finer, denser cloud-like appearance
-        const numSparksPerRing = 2000; // Increased for more visibility
-        const sparkMaxLife = 2; // seconds
-        const sparkMaxExpand = 1; // units
-        const maxThickness = 0.3; // Doubled as requested
-        const maxOscillation = 0.3;
-        const maxShake = 0.1;
-        const maxWobble = 0.2;
-        const waveCount = 5; // Number of waves for oscillation
-        const particleSize = 0.005; // Decreased for finer particles
-        const sparkSize = 0.015; // Increased for more visibility
-        const shakeFrequency = 10; // Frequency for shakiness
-
-        // Create soft particle texture
-        function generateSoftTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64;
-            canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-            gradient.addColorStop(0, 'rgba(255,255,255,1)');
-            gradient.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 64, 64);
-            return canvas;
-        }
-        const softTexture = new THREE.CanvasTexture(generateSoftTexture());
-
-        // Arrays to store ring data
-        const ringDatas = [];
-        const baseRadii = [];
-        const phases = Array.from({ length: numRings }, () => Math.random() * 2 * Math.PI);
-        const colors = [];
-
-        // Define the color list and repeat each twice
-        const colorHexes = [
-            '#1E40AF', '#1E40AF',
-            '#00D2BE', '#00D2BE',
-            '#DC0000', '#DC0000',
-            '#FF8700', '#FF8700',
-            '#006F62', '#006F62',
-            '#FF80BF', '#FF80BF',
-            '#00A0DE', '#00A0DE',
-            '#64748B', '#64748B',
-            '#52E252', '#52E252',
-            '#FFFFFF', '#FFFFFF'
-        ];
-
-        // Create rings with evenly spaced particles
-        for (let i = 0; i < numRings; i++) {
-            const baseRadius = 1 + i * 0.3; // Inner smaller, outer larger
-            baseRadii.push(baseRadius);
-
-            // Use team color if driver data exists, otherwise use default color
-            let colorHex, color;
-            if (i < numDrivers) {
-                colorHex = driverDataWithPositions[i].color;
-                color = new THREE.Color(colorHex);
-            } else {
-                colorHex = colorHexes[i];
-                color = new THREE.Color(colorHex);
-            }
-            colors.push(color);
-            controls.rings[i].colorHex = colorHex;
-
-            const group = new THREE.Group();
-
-            // Main ring particles
-            const mainThetas = [];
-            const mainRadialOffsets = [];
-            const mainJitterPhases = [];
-            const mainPositions = new Float32Array(numParticlesPerRing * 3);
-            const mainParticleColors = new Float32Array(numParticlesPerRing * 3);
-
-            for (let j = 0; j < numParticlesPerRing; j++) {
-                const theta = (j / numParticlesPerRing) * 2 * Math.PI + Math.random() * 0.01; // Slight random for cloudiness
-                mainThetas.push(theta);
-                const offset = (Math.random() - 0.5) * 2; // -1 to 1 for thickness
-                mainRadialOffsets.push(offset);
-                mainJitterPhases.push(Math.random() * 2 * Math.PI);
-
-                // Initial positions (will be updated)
-                mainPositions[j * 3] = 0;
-                mainPositions[j * 3 + 1] = 0;
-                mainPositions[j * 3 + 2] = 0;
-
-                // Slight color variation for cloud-like effect
-                const variedColor = color.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-                mainParticleColors[j * 3] = variedColor.r;
-                mainParticleColors[j * 3 + 1] = variedColor.g;
-                mainParticleColors[j * 3 + 2] = variedColor.b;
-            }
-
-            const mainGeometry = new THREE.BufferGeometry();
-            mainGeometry.setAttribute('position', new THREE.BufferAttribute(mainPositions, 3));
-            mainGeometry.setAttribute('color', new THREE.BufferAttribute(mainParticleColors, 3));
-
-            const mainMaterial = new THREE.PointsMaterial({
-                size: particleSize,
-                map: softTexture,
-                vertexColors: true,
-                transparent: true,
-                opacity: 0.8,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false // Helps with blending
-            });
-
-            const mainPoints = new THREE.Points(mainGeometry, mainMaterial);
-            group.add(mainPoints);
-
-            // Sparks
-            const sparkLives = Array.from({ length: numSparksPerRing }, () => Math.random() * sparkMaxLife);
-            const sparkThetas = Array.from({ length: numSparksPerRing }, () => Math.random() * 2 * Math.PI);
-            const sparkRadialOffsets = Array.from({ length: numSparksPerRing }, () => (Math.random() - 0.5) * 2);
-            const sparkVelocities = Array.from({ length: numSparksPerRing }, () => 0.5 + Math.random());
-            const sparkJitterPhases = Array.from({ length: numSparksPerRing }, () => Math.random() * 2 * Math.PI);
-
-            const sparkPositions = new Float32Array(numSparksPerRing * 3);
-            const sparkColors = new Float32Array(numSparksPerRing * 3);
-
-            const sparkGeometry = new THREE.BufferGeometry();
-            sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
-            sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3));
-
-            const sparkMaterial = new THREE.PointsMaterial({
-                size: sparkSize,
-                map: softTexture,
-                vertexColors: true,
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
-            });
-
-            const sparkPoints = new THREE.Points(sparkGeometry, sparkMaterial);
-            group.add(sparkPoints);
-
-            scene.add(group);
-
-            ringDatas.push({
-                group,
-                mainThetas,
-                mainRadialOffsets,
-                mainJitterPhases,
-                mainGeometry,
-                sparkLives,
-                sparkThetas,
-                sparkRadialOffsets,
-                sparkVelocities,
-                sparkJitterPhases,
-                sparkGeometry
-            });
-        }
-
-        // Apply emotion data to ring controls
-        function applyEmotionData() {
-            for (let i = 0; i < numDrivers; i++) {
-                const driverData = driverDataWithPositions[i];
-                const ringControl = controls.rings[i];
-                
-                // Map emotions to movement parameters:
-                // frustration -> orbitSpeed (how fast the ring rotates)
-                // pressure -> thickness (how spread out the ring is)
-                // confidence -> oscillationAmp (how much the ring waves)
-                // risk_taking -> shakeIntensity (how much the ring shakes)
-                // aggressiveness -> wobbleAmp (how much the ring tilts)
-                
-                ringControl.orbitSpeed = driverData.frustration;
-                ringControl.thickness = driverData.pressure;
-                ringControl.oscillationAmp = driverData.confidence;
-                ringControl.shakeIntensity = driverData.risk_taking;
-                ringControl.wobbleAmp = driverData.aggressiveness;
-                
-                // Update GUI controls
-                ringFolders[i].__controllers.forEach(controller => controller.updateDisplay());
-            }
+        // Create ring entities for each driver
+        function createRingEntities() {
+            const visualization = document.getElementById('f1-visualization');
             
-            // Hide unused rings
-            for (let i = numDrivers; i < numRings; i++) {
-                ringDatas[i].group.visible = false;
+            for (let i = 0; i < numDrivers; i++) {
+                const driver = driverDataWithPositions[i];
+                const baseRadius = animationParams.baseRadii[i];
+                
+                // Create ring group
+                const ringGroup = document.createElement('a-entity');
+                ringGroup.setAttribute('id', `ring-${i}`);
+                ringGroup.setAttribute('position', '0 0 0');
+                ringGroup.setAttribute('rotation', '0 0 0');
+                
+                // Create particles for the ring
+                const numParticles = 100; // Reduced for performance
+                for (let j = 0; j < numParticles; j++) {
+                    const particle = document.createElement('a-sphere');
+                    particle.setAttribute('radius', '0.02');
+                    particle.setAttribute('color', driver.color);
+                    particle.setAttribute('position', '0 0 0');
+                    particle.setAttribute('opacity', '0.8');
+                    
+                    // Store animation data
+                    particle.dataset.theta = (j / numParticles) * 2 * Math.PI;
+                    particle.dataset.offset = (Math.random() - 0.5) * 2;
+                    particle.dataset.jitterPhase = Math.random() * 2 * Math.PI;
+                    particle.dataset.baseRadius = baseRadius;
+                    particle.dataset.driverIndex = i;
+                    
+                    ringGroup.appendChild(particle);
+                }
+                
+                // Create sparks
+                const numSparks = 20;
+                for (let j = 0; j < numSparks; j++) {
+                    const spark = document.createElement('a-sphere');
+                    spark.setAttribute('radius', '0.01');
+                    spark.setAttribute('color', driver.color);
+                    spark.setAttribute('position', '0 0 0');
+                    spark.setAttribute('opacity', '0.6');
+                    
+                    spark.dataset.theta = Math.random() * 2 * Math.PI;
+                    spark.dataset.offset = (Math.random() - 0.5) * 2;
+                    spark.dataset.velocity = 0.5 + Math.random();
+                    spark.dataset.life = Math.random() * 2;
+                    spark.dataset.maxLife = 2;
+                    spark.dataset.driverIndex = i;
+                    
+                    ringGroup.appendChild(spark);
+                }
+                
+                visualization.appendChild(ringGroup);
             }
         }
 
-        // Apply emotion data on initialization
-        applyEmotionData();
+        // Animation function
+        function animateRings() {
+            const time = Date.now() / 1000;
+            const delta = time - animationParams.lastTime;
+            animationParams.lastTime = time;
+            animationParams.time = time;
 
-        function updateRingColors(i) {
-            const hex = controls.rings[i].colorHex;
-            const baseColor = new THREE.Color(hex);
-            colors[i].set(hex);
+            for (let i = 0; i < numDrivers; i++) {
+                const ringGroup = document.getElementById(`ring-${i}`);
+                if (!ringGroup) continue;
 
-            const rd = ringDatas[i];
-            const particleColors = rd.mainGeometry.attributes.color.array;
+                const driver = driverDataWithPositions[i];
+                const phase = animationParams.phases[i];
 
-            for (let j = 0; j < numParticlesPerRing; j++) {
-                const variedColor = baseColor.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-                particleColors[j * 3] = variedColor.r;
-                particleColors[j * 3 + 1] = variedColor.g;
-                particleColors[j * 3 + 2] = variedColor.b;
+                // Apply emotion-based animations
+                const orbitSpeed = driver.frustration;
+                const thickness = driver.pressure;
+                const oscillationAmp = driver.confidence;
+                const shakeIntensity = driver.risk_taking;
+                const wobbleAmp = driver.aggressiveness;
+
+                // Orbit rotation
+                const orbitFactor = orbitSpeed * (1 + i / numDrivers) * 2;
+                const currentRotation = ringGroup.getAttribute('rotation');
+                ringGroup.setAttribute('rotation', {
+                    x: wobbleAmp * animationParams.maxWobble * Math.sin(time + phase),
+                    y: currentRotation.y,
+                    z: currentRotation.z + delta * orbitFactor
+                });
+
+                // Update particles
+                const particles = ringGroup.querySelectorAll('a-sphere');
+                particles.forEach((particle, j) => {
+                    if (j < 100) { // Main particles
+                        const theta = parseFloat(particle.dataset.theta);
+                        const offset = parseFloat(particle.dataset.offset);
+                        const jitterPhase = parseFloat(particle.dataset.jitterPhase);
+                        const baseRadius = parseFloat(particle.dataset.baseRadius);
+
+                        // Calculate position
+                        let r = baseRadius + offset * thickness * animationParams.maxThickness;
+                        
+                        // Add shake
+                        const shake = shakeIntensity * animationParams.maxShake * 
+                                    Math.sin(time * animationParams.shakeFrequency + jitterPhase);
+                        r *= 1 + shake;
+
+                        // Add oscillation
+                        const osc = oscillationAmp * animationParams.maxOscillation * 
+                                  Math.sin(theta * animationParams.waveCount + time * 3 + phase);
+
+                        const x = r * Math.cos(theta);
+                        const y = r * Math.sin(theta);
+                        const z = osc;
+
+                        particle.setAttribute('position', `${x} ${y} ${z}`);
+                    } else { // Sparks
+                        const spark = particle;
+                        spark.dataset.life = parseFloat(spark.dataset.life) + delta;
+                        if (spark.dataset.life > spark.dataset.maxLife) {
+                            spark.dataset.life = 0;
+                        }
+
+                        const lifeNorm = spark.dataset.life / spark.dataset.maxLife;
+                        const theta = parseFloat(spark.dataset.theta);
+                        const offset = parseFloat(spark.dataset.offset);
+                        const velocity = parseFloat(spark.dataset.velocity);
+                        const baseRadius = parseFloat(spark.dataset.baseRadius);
+
+                        let r = baseRadius + offset * thickness * animationParams.maxThickness + 
+                               lifeNorm * velocity * 1;
+
+                        const shake = shakeIntensity * animationParams.maxShake * 
+                                    Math.sin(time * animationParams.shakeFrequency + Math.random());
+                        r *= 1 + shake;
+
+                        const osc = oscillationAmp * animationParams.maxOscillation * 
+                                  Math.sin(theta * animationParams.waveCount + time * 3 + phase);
+
+                        const x = r * Math.cos(theta);
+                        const y = r * Math.sin(theta);
+                        const z = osc;
+
+                        spark.setAttribute('position', `${x} ${y} ${z}`);
+                        spark.setAttribute('opacity', 0.6 * (1 - lifeNorm));
+                    }
+                });
             }
 
-            rd.mainGeometry.attributes.color.needsUpdate = true;
+            requestAnimationFrame(animateRings);
         }
 
         // Update info panel
@@ -441,157 +334,45 @@
             infoDiv.innerHTML = html;
         }
 
-        updateInfoPanel();
-
-        // Animation loop
-        let lastTime = 0;
-        function animate(time) {
-            requestAnimationFrame(animate);
-            time /= 1000; // Convert to seconds
-            const delta = time - lastTime;
-            lastTime = time;
-
-            for (let i = 0; i < numRings; i++) {
-                const rd = ringDatas[i];
-                const group = rd.group;
-                const ringControl = controls.rings[i];
-
-                // Skip animation for hidden rings
-                if (!group.visible) continue;
-
-                // 1. Orbit speed: Rotate group around z-axis, individual per ring
-                const orbitFactor = ringControl.orbitSpeed * (1 + i / numRings) * 2;
-                group.rotation.z += delta * orbitFactor;
-
-                // 5. Wobble: Tilt the group (rotation around x-axis)
-                const wobble = ringControl.wobbleAmp * maxWobble * Math.sin(time + phases[i]);
-                group.rotation.x = wobble;
-
-                // Update main particle positions
-                const mainPositions = rd.mainGeometry.attributes.position.array;
-                for (let j = 0; j < numParticlesPerRing; j++) {
-                    let theta = rd.mainThetas[j];
-                    const offset = rd.mainRadialOffsets[j];
-
-                    // 3. Thickness: Radial spread
-                    const thick = ringControl.thickness * maxThickness;
-                    let r = baseRadii[i] + offset * thick;
-
-                    // 4. Shakiness: Per-particle shake
-                    const shake = ringControl.shakeIntensity * maxShake * Math.sin(time * shakeFrequency + rd.mainJitterPhases[j]);
-                    r *= 1 + shake;
-
-                    // 2. Oscillation around itself: Wave in z-direction
-                    const osc = ringControl.oscillationAmp * maxOscillation * Math.sin(theta * waveCount + time * 3 + phases[i]);
-
-                    // Compute positions
-                    mainPositions[j * 3] = r * Math.cos(theta);
-                    mainPositions[j * 3 + 1] = r * Math.sin(theta);
-                    mainPositions[j * 3 + 2] = osc;
-                }
-                rd.mainGeometry.attributes.position.needsUpdate = true;
-
-                // Update spark positions and colors
-                const sparkPositions = rd.sparkGeometry.attributes.position.array;
-                const sparkColors = rd.sparkGeometry.attributes.color.array;
-                for (let j = 0; j < numSparksPerRing; j++) {
-                    rd.sparkLives[j] += delta;
-                    if (rd.sparkLives[j] > sparkMaxLife) {
-                        rd.sparkLives[j] -= sparkMaxLife;
-                    }
-
-                    const lifeNorm = rd.sparkLives[j] / sparkMaxLife;
-                    const theta = rd.sparkThetas[j];
-                    const offset = rd.sparkRadialOffsets[j];
-                    const vel = rd.sparkVelocities[j];
-
-                    // 3. Thickness: Radial spread
-                    const thick = ringControl.thickness * maxThickness;
-                    let r = baseRadii[i] + offset * thick + lifeNorm * vel * sparkMaxExpand;
-
-                    // 4. Shakiness: Per-particle shake for sparks
-                    const shake = ringControl.shakeIntensity * maxShake * Math.sin(time * shakeFrequency + rd.sparkJitterPhases[j]);
-                    r *= 1 + shake;
-
-                    // 2. Oscillation around itself: Wave in z-direction
-                    const osc = ringControl.oscillationAmp * maxOscillation * Math.sin(theta * waveCount + time * 3 + phases[i]);
-
-                    // Compute positions
-                    sparkPositions[j * 3] = r * Math.cos(theta);
-                    sparkPositions[j * 3 + 1] = r * Math.sin(theta);
-                    sparkPositions[j * 3 + 2] = osc;
-
-                    // Fade out using ring color
-                    const brightness = 1 - lifeNorm;
-                    sparkColors[j * 3] = colors[i].r * brightness;
-                    sparkColors[j * 3 + 1] = colors[i].g * brightness;
-                    sparkColors[j * 3 + 2] = colors[i].b * brightness;
-                }
-                rd.sparkGeometry.attributes.position.needsUpdate = true;
-                rd.sparkGeometry.attributes.color.needsUpdate = true;
-            }
-
-            // Adjust exposure based on camera distance
-            const camDist = camera.position.length();
-            renderer.toneMappingExposure = initialDist / camDist;
-
-            orbitControls.update();
-            composer.render();
-        }
-
-        animate(0);
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight);
+        // Initialize when scene is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            updateInfoPanel();
         });
 
-        // Function to capture high-resolution PNG
+        // Start animation when AR scene is ready
+        document.addEventListener('renderstart', () => {
+            createRingEntities();
+            animateRings();
+        });
+
+        // Handle AR events
+        document.addEventListener('mindar-image-target-found', () => {
+            console.log('Target found!');
+            document.querySelector('.ar-ui').style.display = 'none';
+        });
+
+        document.addEventListener('mindar-image-target-lost', () => {
+            console.log('Target lost!');
+            document.querySelector('.ar-ui').style.display = 'block';
+        });
+
+        // Capture function (simplified for AR)
         function captureHighRes() {
-            const multiplier = 2;
-            const w = window.innerWidth * multiplier;
-            const h = window.innerHeight * multiplier;
-
-            // Save original settings
-            const originalWidth = renderer.domElement.width;
-            const originalHeight = renderer.domElement.height;
-            const originalAspect = camera.aspect;
-
-            // Set high-res size
-            renderer.setSize(w, h);
-            composer.setSize(w, h);
-            camera.aspect = w / h;
-            camera.updateProjectionMatrix();
-
-            // Render high-res
-            composer.render();
-
-            // Capture data URL
-            const dataURL = renderer.domElement.toDataURL('image/png');
-
-            // Restore original settings
-            renderer.setSize(originalWidth, originalHeight);
-            composer.setSize(originalWidth, originalHeight);
-            camera.aspect = originalAspect;
-            camera.updateProjectionMatrix();
-
-            // Render again at original size
-            composer.render();
-
-            // Download the image
-            const link = document.createElement('a');
-            link.download = 'f1_emotions_lap31.png';
-            link.href = dataURL;
-            link.click();
+            // For AR, we'll just take a screenshot of the current view
+            const canvas = document.querySelector('canvas');
+            if (canvas) {
+                const dataURL = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = 'f1_emotions_ar.png';
+                link.href = dataURL;
+                link.click();
+            }
         }
 
         // Add button listener
         document.getElementById('captureButton').addEventListener('click', captureHighRes);
 
-        // Add keyboard listener for 'p' key to capture (optional, kept for convenience)
+        // Add keyboard listener for 'p' key to capture
         window.addEventListener('keydown', (e) => {
             if (e.key === 'p') {
                 captureHighRes();
