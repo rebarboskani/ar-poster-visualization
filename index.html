@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>F1 Driver Emotions Visualization</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #captureButton {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            padding: 10px;
+            background-color: white;
+            border: 1px solid black;
+            cursor: pointer;
+        }
+        #infoPanel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            max-width: 300px;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@latest/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@latest/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+</head>
+<body>
+    <button id="captureButton">Capture High-Res PNG</button>
+    <div id="infoPanel">
+        <h3>F1 Driver Emotions - Lap 31</h3>
+        <div id="driverInfo"></div>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // Emotion data for lap 31
+        const lap31Data = [
+            { driver: 'ALO', frustration: 0.323544798, pressure: 0.617500849, confidence: 0.105177988, risk_taking: 0.030807275, aggressiveness: 0.001775942 },
+            { driver: 'BOT', frustration: 0.727975797, pressure: 0.140316103, confidence: 0.480549578, risk_taking: 1, aggressiveness: 0.209852642 },
+            { driver: 'GAS', frustration: 0.485317198, pressure: 0.630510672, confidence: 0.103525108, risk_taking: 0.030726159, aggressiveness: 0.01399344 },
+            { driver: 'GIO', frustration: 0.485317198, pressure: 0.437472388, confidence: 0.227066803, risk_taking: 0.030092652, aggressiveness: 0.004172932 },
+            { driver: 'HAM', frustration: 0.796142483, pressure: 0.340052056, confidence: 0.150121383, risk_taking: 0.117548898, aggressiveness: 0.003268662 },
+            { driver: 'LAT', frustration: 0.485317198, pressure: 0.200273496, confidence: 0.811843627, risk_taking: 0.029494777, aggressiveness: 0.012205709 },
+            { driver: 'LEC', frustration: 0.485317198, pressure: 0.412754581, confidence: 0.201731196, risk_taking: 0.030367163, aggressiveness: 0.03459888 },
+            { driver: 'MSC', frustration: 0.485317198, pressure: 0.670551076, confidence: 0.135798686, risk_taking: 0.02842724, aggressiveness: 0.006858782 },
+            { driver: 'NOR', frustration: 0.485317198, pressure: 0.366885779, confidence: 0.208682631, risk_taking: 0.030264732, aggressiveness: 0.019096759 },
+            { driver: 'OCO', frustration: 0.485317198, pressure: 0.475136329, confidence: 0.174534518, risk_taking: 0.030998334, aggressiveness: 0.010192814 },
+            { driver: 'PER', frustration: 0.485317198, pressure: 0.240449326, confidence: 0.301045268, risk_taking: 0.031178068, aggressiveness: 0.00213754 },
+            { driver: 'RIC', frustration: 0.485317198, pressure: 0.391030564, confidence: 0.228950875, risk_taking: 0.030048951, aggressiveness: 0.014385012 },
+            { driver: 'SAI', frustration: 0.485317198, pressure: 0.305738468, confidence: 0.251498555, risk_taking: 0.029936726, aggressiveness: 0.024871777 },
+            { driver: 'STR', frustration: 0.485317198, pressure: 0.364729362, confidence: 0.301001018, risk_taking: 0.029901844, aggressiveness: 0.025246686 },
+            { driver: 'TSU', frustration: 0.323544798, pressure: 0.266742267, confidence: 0.359470897, risk_taking: 0.031380498, aggressiveness: 0.028809249 },
+            { driver: 'VER', frustration: 0.744710872, pressure: 0.352823666, confidence: 0.175107887, risk_taking: 0.031402166, aggressiveness: 0.009761564 },
+            { driver: 'VET', frustration: 0.323544798, pressure: 0.311809755, confidence: 0.356537819, risk_taking: 0.285815829, aggressiveness: 0.55469696 }
+        ];
+
+        // Lap 31 positions from the CSV file
+        const lap31Positions = [
+            { position: 1, driver: 'HAM', color: '#00f5d0' },   // Mercedes
+            { position: 2, driver: 'VER', color: '#0600ef' },   // Red Bull
+            { position: 3, driver: 'PER', color: '#0600ef' },   // Red Bull
+            { position: 4, driver: 'ALO', color: '#0755ab' },   // Alpine
+            { position: 5, driver: 'GAS', color: '#2b4562' },   // AlphaTauri
+            { position: 6, driver: 'SAI', color: '#dc0004' },   // Ferrari
+            { position: 7, driver: 'NOR', color: '#ff8000' },   // McLaren
+            { position: 8, driver: 'LEC', color: '#dc0004' },   // Ferrari
+            { position: 9, driver: 'BOT', color: '#00f5d0' },   // Mercedes
+            { position: 10, driver: 'TSU', color: '#2b4562' },  // AlphaTauri
+            { position: 11, driver: 'OCO', color: '#0755ab' },  // Alpine
+            { position: 12, driver: 'RIC', color: '#ff8000' },  // McLaren
+            { position: 13, driver: 'GIO', color: '#900000' },  // Alfa Romeo
+            { position: 14, driver: 'VET', color: '#00665e' },  // Aston Martin
+            { position: 15, driver: 'STR', color: '#00665e' },  // Aston Martin
+            { position: 16, driver: 'MSC', color: '#b6babd' },  // Haas
+            { position: 17, driver: 'LAT', color: '#00a0dd' }   // Williams
+        ];
+
+        // Function to normalize emotion values
+        function normalizeEmotions(data) {
+            // Calculate min and max for each emotion
+            const emotions = ['frustration', 'pressure', 'confidence', 'risk_taking', 'aggressiveness'];
+            const ranges = {};
+            
+            emotions.forEach(emotion => {
+                const values = data.map(driver => driver[emotion]);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                ranges[emotion] = { min, max, range: max - min };
+                console.log(`${emotion}: Min: ${min.toFixed(6)}, Max: ${max.toFixed(6)}, Range: ${(max - min).toFixed(6)}`);
+            });
+            
+            // Normalize each driver's emotions
+            return data.map(driver => {
+                const normalized = { driver: driver.driver };
+                emotions.forEach(emotion => {
+                    const value = driver[emotion];
+                    const range = ranges[emotion];
+                    // Normalize to 0-1 range
+                    normalized[emotion] = range.range === 0 ? 0.5 : (value - range.min) / range.range;
+                });
+                return normalized;
+            });
+        }
+
+        // Normalize the emotion data
+        const normalizedLap31Data = normalizeEmotions(lap31Data);
+
+        // Create driver data with positions and colors
+        const driverDataWithPositions = lap31Positions.map(pos => {
+            const emotionData = normalizedLap31Data.find(d => d.driver === pos.driver);
+            return {
+                ...emotionData,
+                position: pos.position,
+                color: pos.color
+            };
+        });
+
+        const numDrivers = driverDataWithPositions.length;
+        const numRings = 20;
+
+        // Initialize scene, camera, and renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000);
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        document.body.appendChild(renderer.domElement);
+
+        // Post-processing for bloom effect
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.1;
+        bloomPass.strength = 1.2;
+        bloomPass.radius = 0.5;
+        composer.addPass(bloomPass);
+
+        // Add free camera control
+        const orbitControls = new OrbitControls(camera, renderer.domElement);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+
+        camera.position.set(0, 0, 8); // Initial camera position
+        const initialDist = camera.position.length();
+
+        // Controls for the movements (individual objects for each ring)
+        const controls = {
+            rings: Array.from({ length: numRings }, () => ({
+                orbitSpeed: 0.5,
+                oscillationAmp: 0.5,
+                thickness: 0.5,
+                shakeIntensity: 0.5,
+                wobbleAmp: 0.5,
+                colorHex: ''
+            }))
+        };
+
+        const gui = new dat.GUI();
+        const ringFolders = [];
+        const colorChoices = ['#1E40AF', '#00D2BE', '#DC0000', '#FF8700', '#006F62', '#FF80BF', '#00A0DE', '#64748B', '#52E252', '#FFFFFF'];
+        
+        // Only create GUI controls for rings that have driver data
+        for (let i = 0; i < numRings; i++) {
+            const ringFolder = gui.addFolder(`Ring ${i+1}${i < numDrivers ? ` - ${driverDataWithPositions[i].driver}` : ' (Unused)'}`);
+            ringFolder.add(controls.rings[i], 'orbitSpeed', 0, 1);
+            ringFolder.add(controls.rings[i], 'oscillationAmp', 0, 1);
+            ringFolder.add(controls.rings[i], 'thickness', 0, 1);
+            ringFolder.add(controls.rings[i], 'shakeIntensity', 0, 1);
+            ringFolder.add(controls.rings[i], 'wobbleAmp', 0, 1);
+            ringFolder.add(controls.rings[i], 'colorHex', colorChoices).name('Color').onChange(() => updateRingColors(i));
+            ringFolders.push(ringFolder);
+        }
+
+        // Add bloom controls
+        const bloomFolder = gui.addFolder('Bloom');
+        bloomFolder.add(bloomPass, 'threshold', 0, 1).name('Threshold');
+        bloomFolder.add(bloomPass, 'strength', 0, 3).name('Strength');
+        bloomFolder.add(bloomPass, 'radius', 0, 1).name('Radius');
+
+        // Add randomize button
+        const actions = {
+            randomize: function() {
+                controls.rings.forEach(ring => {
+                    ring.orbitSpeed = Math.random();
+                    ring.oscillationAmp = Math.random();
+                    ring.thickness = Math.random();
+                    ring.shakeIntensity = Math.random();
+                    ring.wobbleAmp = Math.random();
+                });
+                ringFolders.forEach(folder => {
+                    folder.__controllers.forEach(controller => controller.updateDisplay());
+                });
+            }
+        };
+        gui.add(actions, 'randomize').name('Randomize All');
+
+        // Parameters
+        const numParticlesPerRing = 20000; // Increased for finer, denser cloud-like appearance
+        const numSparksPerRing = 2000; // Increased for more visibility
+        const sparkMaxLife = 2; // seconds
+        const sparkMaxExpand = 1; // units
+        const maxThickness = 0.3; // Doubled as requested
+        const maxOscillation = 0.3;
+        const maxShake = 0.1;
+        const maxWobble = 0.2;
+        const waveCount = 5; // Number of waves for oscillation
+        const particleSize = 0.005; // Decreased for finer particles
+        const sparkSize = 0.015; // Increased for more visibility
+        const shakeFrequency = 10; // Frequency for shakiness
+
+        // Create soft particle texture
+        function generateSoftTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 64, 64);
+            return canvas;
+        }
+        const softTexture = new THREE.CanvasTexture(generateSoftTexture());
+
+        // Arrays to store ring data
+        const ringDatas = [];
+        const baseRadii = [];
+        const phases = Array.from({ length: numRings }, () => Math.random() * 2 * Math.PI);
+        const colors = [];
+
+        // Define the color list and repeat each twice
+        const colorHexes = [
+            '#1E40AF', '#1E40AF',
+            '#00D2BE', '#00D2BE',
+            '#DC0000', '#DC0000',
+            '#FF8700', '#FF8700',
+            '#006F62', '#006F62',
+            '#FF80BF', '#FF80BF',
+            '#00A0DE', '#00A0DE',
+            '#64748B', '#64748B',
+            '#52E252', '#52E252',
+            '#FFFFFF', '#FFFFFF'
+        ];
+
+        // Create rings with evenly spaced particles
+        for (let i = 0; i < numRings; i++) {
+            const baseRadius = 1 + i * 0.3; // Inner smaller, outer larger
+            baseRadii.push(baseRadius);
+
+            // Use team color if driver data exists, otherwise use default color
+            let colorHex, color;
+            if (i < numDrivers) {
+                colorHex = driverDataWithPositions[i].color;
+                color = new THREE.Color(colorHex);
+            } else {
+                colorHex = colorHexes[i];
+                color = new THREE.Color(colorHex);
+            }
+            colors.push(color);
+            controls.rings[i].colorHex = colorHex;
+
+            const group = new THREE.Group();
+
+            // Main ring particles
+            const mainThetas = [];
+            const mainRadialOffsets = [];
+            const mainJitterPhases = [];
+            const mainPositions = new Float32Array(numParticlesPerRing * 3);
+            const mainParticleColors = new Float32Array(numParticlesPerRing * 3);
+
+            for (let j = 0; j < numParticlesPerRing; j++) {
+                const theta = (j / numParticlesPerRing) * 2 * Math.PI + Math.random() * 0.01; // Slight random for cloudiness
+                mainThetas.push(theta);
+                const offset = (Math.random() - 0.5) * 2; // -1 to 1 for thickness
+                mainRadialOffsets.push(offset);
+                mainJitterPhases.push(Math.random() * 2 * Math.PI);
+
+                // Initial positions (will be updated)
+                mainPositions[j * 3] = 0;
+                mainPositions[j * 3 + 1] = 0;
+                mainPositions[j * 3 + 2] = 0;
+
+                // Slight color variation for cloud-like effect
+                const variedColor = color.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+                mainParticleColors[j * 3] = variedColor.r;
+                mainParticleColors[j * 3 + 1] = variedColor.g;
+                mainParticleColors[j * 3 + 2] = variedColor.b;
+            }
+
+            const mainGeometry = new THREE.BufferGeometry();
+            mainGeometry.setAttribute('position', new THREE.BufferAttribute(mainPositions, 3));
+            mainGeometry.setAttribute('color', new THREE.BufferAttribute(mainParticleColors, 3));
+
+            const mainMaterial = new THREE.PointsMaterial({
+                size: particleSize,
+                map: softTexture,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false // Helps with blending
+            });
+
+            const mainPoints = new THREE.Points(mainGeometry, mainMaterial);
+            group.add(mainPoints);
+
+            // Sparks
+            const sparkLives = Array.from({ length: numSparksPerRing }, () => Math.random() * sparkMaxLife);
+            const sparkThetas = Array.from({ length: numSparksPerRing }, () => Math.random() * 2 * Math.PI);
+            const sparkRadialOffsets = Array.from({ length: numSparksPerRing }, () => (Math.random() - 0.5) * 2);
+            const sparkVelocities = Array.from({ length: numSparksPerRing }, () => 0.5 + Math.random());
+            const sparkJitterPhases = Array.from({ length: numSparksPerRing }, () => Math.random() * 2 * Math.PI);
+
+            const sparkPositions = new Float32Array(numSparksPerRing * 3);
+            const sparkColors = new Float32Array(numSparksPerRing * 3);
+
+            const sparkGeometry = new THREE.BufferGeometry();
+            sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+            sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3));
+
+            const sparkMaterial = new THREE.PointsMaterial({
+                size: sparkSize,
+                map: softTexture,
+                vertexColors: true,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            const sparkPoints = new THREE.Points(sparkGeometry, sparkMaterial);
+            group.add(sparkPoints);
+
+            scene.add(group);
+
+            ringDatas.push({
+                group,
+                mainThetas,
+                mainRadialOffsets,
+                mainJitterPhases,
+                mainGeometry,
+                sparkLives,
+                sparkThetas,
+                sparkRadialOffsets,
+                sparkVelocities,
+                sparkJitterPhases,
+                sparkGeometry
+            });
+        }
+
+        // Apply emotion data to ring controls
+        function applyEmotionData() {
+            for (let i = 0; i < numDrivers; i++) {
+                const driverData = driverDataWithPositions[i];
+                const ringControl = controls.rings[i];
+                
+                // Map emotions to movement parameters:
+                // frustration -> orbitSpeed (how fast the ring rotates)
+                // pressure -> thickness (how spread out the ring is)
+                // confidence -> oscillationAmp (how much the ring waves)
+                // risk_taking -> shakeIntensity (how much the ring shakes)
+                // aggressiveness -> wobbleAmp (how much the ring tilts)
+                
+                ringControl.orbitSpeed = driverData.frustration;
+                ringControl.thickness = driverData.pressure;
+                ringControl.oscillationAmp = driverData.confidence;
+                ringControl.shakeIntensity = driverData.risk_taking;
+                ringControl.wobbleAmp = driverData.aggressiveness;
+                
+                // Update GUI controls
+                ringFolders[i].__controllers.forEach(controller => controller.updateDisplay());
+            }
+            
+            // Hide unused rings
+            for (let i = numDrivers; i < numRings; i++) {
+                ringDatas[i].group.visible = false;
+            }
+        }
+
+        // Apply emotion data on initialization
+        applyEmotionData();
+
+        function updateRingColors(i) {
+            const hex = controls.rings[i].colorHex;
+            const baseColor = new THREE.Color(hex);
+            colors[i].set(hex);
+
+            const rd = ringDatas[i];
+            const particleColors = rd.mainGeometry.attributes.color.array;
+
+            for (let j = 0; j < numParticlesPerRing; j++) {
+                const variedColor = baseColor.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+                particleColors[j * 3] = variedColor.r;
+                particleColors[j * 3 + 1] = variedColor.g;
+                particleColors[j * 3 + 2] = variedColor.b;
+            }
+
+            rd.mainGeometry.attributes.color.needsUpdate = true;
+        }
+
+        // Update info panel
+        function updateInfoPanel() {
+            const infoDiv = document.getElementById('driverInfo');
+            let html = '';
+            for (let i = 0; i < numDrivers; i++) {
+                const driver = driverDataWithPositions[i];
+                const originalDriver = lap31Data.find(d => d.driver === driver.driver);
+                html += `<div style="margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px;">
+                    <strong>${driver.driver}</strong> (Ring ${i+1}) - P${driver.position}<br>
+                    <small style="color: #aaa;">Original → Normalized</small><br>
+                    Frustration: ${(originalDriver.frustration * 100).toFixed(1)}% → ${(driver.frustration * 100).toFixed(1)}%<br>
+                    Pressure: ${(originalDriver.pressure * 100).toFixed(1)}% → ${(driver.pressure * 100).toFixed(1)}%<br>
+                    Confidence: ${(originalDriver.confidence * 100).toFixed(1)}% → ${(driver.confidence * 100).toFixed(1)}%<br>
+                    Risk-taking: ${(originalDriver.risk_taking * 100).toFixed(1)}% → ${(driver.risk_taking * 100).toFixed(1)}%<br>
+                    Aggressiveness: ${(originalDriver.aggressiveness * 100).toFixed(1)}% → ${(driver.aggressiveness * 100).toFixed(1)}%
+                </div>`;
+            }
+            infoDiv.innerHTML = html;
+        }
+
+        updateInfoPanel();
+
+        // Animation loop
+        let lastTime = 0;
+        function animate(time) {
+            requestAnimationFrame(animate);
+            time /= 1000; // Convert to seconds
+            const delta = time - lastTime;
+            lastTime = time;
+
+            for (let i = 0; i < numRings; i++) {
+                const rd = ringDatas[i];
+                const group = rd.group;
+                const ringControl = controls.rings[i];
+
+                // Skip animation for hidden rings
+                if (!group.visible) continue;
+
+                // 1. Orbit speed: Rotate group around z-axis, individual per ring
+                const orbitFactor = ringControl.orbitSpeed * (1 + i / numRings) * 2;
+                group.rotation.z += delta * orbitFactor;
+
+                // 5. Wobble: Tilt the group (rotation around x-axis)
+                const wobble = ringControl.wobbleAmp * maxWobble * Math.sin(time + phases[i]);
+                group.rotation.x = wobble;
+
+                // Update main particle positions
+                const mainPositions = rd.mainGeometry.attributes.position.array;
+                for (let j = 0; j < numParticlesPerRing; j++) {
+                    let theta = rd.mainThetas[j];
+                    const offset = rd.mainRadialOffsets[j];
+
+                    // 3. Thickness: Radial spread
+                    const thick = ringControl.thickness * maxThickness;
+                    let r = baseRadii[i] + offset * thick;
+
+                    // 4. Shakiness: Per-particle shake
+                    const shake = ringControl.shakeIntensity * maxShake * Math.sin(time * shakeFrequency + rd.mainJitterPhases[j]);
+                    r *= 1 + shake;
+
+                    // 2. Oscillation around itself: Wave in z-direction
+                    const osc = ringControl.oscillationAmp * maxOscillation * Math.sin(theta * waveCount + time * 3 + phases[i]);
+
+                    // Compute positions
+                    mainPositions[j * 3] = r * Math.cos(theta);
+                    mainPositions[j * 3 + 1] = r * Math.sin(theta);
+                    mainPositions[j * 3 + 2] = osc;
+                }
+                rd.mainGeometry.attributes.position.needsUpdate = true;
+
+                // Update spark positions and colors
+                const sparkPositions = rd.sparkGeometry.attributes.position.array;
+                const sparkColors = rd.sparkGeometry.attributes.color.array;
+                for (let j = 0; j < numSparksPerRing; j++) {
+                    rd.sparkLives[j] += delta;
+                    if (rd.sparkLives[j] > sparkMaxLife) {
+                        rd.sparkLives[j] -= sparkMaxLife;
+                    }
+
+                    const lifeNorm = rd.sparkLives[j] / sparkMaxLife;
+                    const theta = rd.sparkThetas[j];
+                    const offset = rd.sparkRadialOffsets[j];
+                    const vel = rd.sparkVelocities[j];
+
+                    // 3. Thickness: Radial spread
+                    const thick = ringControl.thickness * maxThickness;
+                    let r = baseRadii[i] + offset * thick + lifeNorm * vel * sparkMaxExpand;
+
+                    // 4. Shakiness: Per-particle shake for sparks
+                    const shake = ringControl.shakeIntensity * maxShake * Math.sin(time * shakeFrequency + rd.sparkJitterPhases[j]);
+                    r *= 1 + shake;
+
+                    // 2. Oscillation around itself: Wave in z-direction
+                    const osc = ringControl.oscillationAmp * maxOscillation * Math.sin(theta * waveCount + time * 3 + phases[i]);
+
+                    // Compute positions
+                    sparkPositions[j * 3] = r * Math.cos(theta);
+                    sparkPositions[j * 3 + 1] = r * Math.sin(theta);
+                    sparkPositions[j * 3 + 2] = osc;
+
+                    // Fade out using ring color
+                    const brightness = 1 - lifeNorm;
+                    sparkColors[j * 3] = colors[i].r * brightness;
+                    sparkColors[j * 3 + 1] = colors[i].g * brightness;
+                    sparkColors[j * 3 + 2] = colors[i].b * brightness;
+                }
+                rd.sparkGeometry.attributes.position.needsUpdate = true;
+                rd.sparkGeometry.attributes.color.needsUpdate = true;
+            }
+
+            // Adjust exposure based on camera distance
+            const camDist = camera.position.length();
+            renderer.toneMappingExposure = initialDist / camDist;
+
+            orbitControls.update();
+            composer.render();
+        }
+
+        animate(0);
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Function to capture high-resolution PNG
+        function captureHighRes() {
+            const multiplier = 2;
+            const w = window.innerWidth * multiplier;
+            const h = window.innerHeight * multiplier;
+
+            // Save original settings
+            const originalWidth = renderer.domElement.width;
+            const originalHeight = renderer.domElement.height;
+            const originalAspect = camera.aspect;
+
+            // Set high-res size
+            renderer.setSize(w, h);
+            composer.setSize(w, h);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+
+            // Render high-res
+            composer.render();
+
+            // Capture data URL
+            const dataURL = renderer.domElement.toDataURL('image/png');
+
+            // Restore original settings
+            renderer.setSize(originalWidth, originalHeight);
+            composer.setSize(originalWidth, originalHeight);
+            camera.aspect = originalAspect;
+            camera.updateProjectionMatrix();
+
+            // Render again at original size
+            composer.render();
+
+            // Download the image
+            const link = document.createElement('a');
+            link.download = 'f1_emotions_lap31.png';
+            link.href = dataURL;
+            link.click();
+        }
+
+        // Add button listener
+        document.getElementById('captureButton').addEventListener('click', captureHighRes);
+
+        // Add keyboard listener for 'p' key to capture (optional, kept for convenience)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'p') {
+                captureHighRes();
+            }
+        });
+    </script>
+</body>
+</html>
