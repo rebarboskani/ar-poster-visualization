@@ -9,29 +9,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; }
-        #captureButton {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 100;
-            padding: 10px;
-            background-color: white;
-            border: 1px solid black;
-            cursor: pointer;
-        }
-        #infoPanel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 100;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            max-width: 300px;
-        }
+
+
         .ar-ui {
             position: absolute;
             top: 50%;
@@ -45,11 +24,7 @@
     </style>
 </head>
 <body>
-    <button id="captureButton">Capture High-Res PNG</button>
-    <div id="infoPanel">
-        <h3>F1 Driver Emotions - Lap 31</h3>
-        <div id="driverInfo"></div>
-    </div>
+
     <div class="ar-ui">
         <h2>Point camera at the F1 poster</h2>
         <p>Scan the target image to see the 3D visualization</p>
@@ -184,7 +159,7 @@
                 const numParticles = 100; // Reduced for performance
                 for (let j = 0; j < numParticles; j++) {
                     const particle = document.createElement('a-sphere');
-                    particle.setAttribute('radius', '0.02');
+                    particle.setAttribute('radius', '0.005');
                     particle.setAttribute('color', driver.color);
                     particle.setAttribute('position', '0 0 0');
                     particle.setAttribute('opacity', '0.8');
@@ -203,7 +178,7 @@
                 const numSparks = 20;
                 for (let j = 0; j < numSparks; j++) {
                     const spark = document.createElement('a-sphere');
-                    spark.setAttribute('radius', '0.01');
+                    spark.setAttribute('radius', '0.003');
                     spark.setAttribute('color', driver.color);
                     spark.setAttribute('position', '0 0 0');
                     spark.setAttribute('opacity', '0.6');
@@ -314,29 +289,9 @@
             requestAnimationFrame(animateRings);
         }
 
-        // Update info panel
-        function updateInfoPanel() {
-            const infoDiv = document.getElementById('driverInfo');
-            let html = '';
-            for (let i = 0; i < numDrivers; i++) {
-                const driver = driverDataWithPositions[i];
-                const originalDriver = lap31Data.find(d => d.driver === driver.driver);
-                html += `<div style="margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px;">
-                    <strong>${driver.driver}</strong> (Ring ${i+1}) - P${driver.position}<br>
-                    <small style="color: #aaa;">Original → Normalized</small><br>
-                    Frustration: ${(originalDriver.frustration * 100).toFixed(1)}% → ${(driver.frustration * 100).toFixed(1)}%<br>
-                    Pressure: ${(originalDriver.pressure * 100).toFixed(1)}% → ${(driver.pressure * 100).toFixed(1)}%<br>
-                    Confidence: ${(originalDriver.confidence * 100).toFixed(1)}% → ${(driver.confidence * 100).toFixed(1)}%<br>
-                    Risk-taking: ${(originalDriver.risk_taking * 100).toFixed(1)}% → ${(driver.risk_taking * 100).toFixed(1)}%<br>
-                    Aggressiveness: ${(originalDriver.aggressiveness * 100).toFixed(1)}% → ${(driver.aggressiveness * 100).toFixed(1)}%
-                </div>`;
-            }
-            infoDiv.innerHTML = html;
-        }
-
         // Initialize when scene is loaded
         document.addEventListener('DOMContentLoaded', () => {
-            updateInfoPanel();
+            // Scene ready
         });
 
         // Start animation when AR scene is ready
@@ -356,28 +311,7 @@
             document.querySelector('.ar-ui').style.display = 'block';
         });
 
-        // Capture function (simplified for AR)
-        function captureHighRes() {
-            // For AR, we'll just take a screenshot of the current view
-            const canvas = document.querySelector('canvas');
-            if (canvas) {
-                const dataURL = canvas.toDataURL('image/png');
-                const link = document.createElement('a');
-                link.download = 'f1_emotions_ar.png';
-                link.href = dataURL;
-                link.click();
-            }
-        }
 
-        // Add button listener
-        document.getElementById('captureButton').addEventListener('click', captureHighRes);
-
-        // Add keyboard listener for 'p' key to capture
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'p') {
-                captureHighRes();
-            }
-        });
     </script>
 </body>
 </html>
